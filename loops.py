@@ -1,14 +1,23 @@
 """
 MAIN del juego donde estan todos los LOOPS
 """
+from entity import Player,Enemy,Shoot
 import pygame,time
 import datetime
 import os
 import colors
-import threading
+import firebase_admin
+from firebase_admin import credentials, db
 
-# Clases de las entidades
-from entity import Player,Enemy,Shoot
+
+# Configuración del archivo de claves JSON
+cred = credentials.Certificate('space-invader-mini-firebase-adminsdk-fqoic-c1c0583615.json')
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://space-invader-mini-default-rtdb.firebaseio.com/'
+})
+
+# Referencia a la base de datos de Firebase
+ref = db.reference('high_score') 
 
 # Iniciar PYGAME
 pygame.init()
@@ -32,6 +41,34 @@ admin_select = pygame.mixer.Sound("sound/admin_select.wav")
 
 #Muisca
 song1 = ("sound/song1.wav")
+
+#  
+def load_high_score():
+    '''
+    print("Loading high score from Firebase...")
+    ref = db.reference('high_score')
+    print("Loading high score...")
+    high_score = ref.get()
+    print (high_score)
+    print("Complete")
+    '''
+    high_score_data = ref.get()
+    if high_score_data is None:
+        #no existe asi q crea una con 0
+        ref.set({'high_score':0})
+        return 0
+    high_score = high_score_data['high_score']
+    print("SE CARGO EL HIGHSCORE: ",high_score)
+    return high_score 
+
+
+def save_high_score(high_score):
+    ref = db.reference('high_score')
+    ref.set({
+        'high_score': high_score
+    })
+    print("High score saved to Firebase.")
+
 
 
 # Menu principal 0
@@ -185,9 +222,10 @@ def pause(execute_pause):
 
 # Juego principal 1
 def principal_game():
-    pygame.init()
-    global enemy_counter
-    global pause_desition
+    # Inicializar high score al inicio del juego desde Firebase
+    
+    pygame.init() 
+    
 
     # Titulo/Icon
     pygame.display.set_caption("Space Invader")
@@ -220,35 +258,22 @@ def principal_game():
 
 
     # HIGH SCORE
-    
-    # Guardar high score en un hilo separado
-    def save_high_score_thread(high_score, filename="high_score.txt"):
-        with open(filename, "w") as file:
-            file.write(str(high_score))
-
     # Actualizar el high score y guardar en un hilo separado
-    def update_high_score(enemy_counter, high_score):
-        if enemy_counter > high_score:
-            high_score = enemy_counter
-            save_thread = threading.Thread(target=save_high_score_thread, args=(high_score,))
-            save_thread.start()
-        return high_score
-    
-
-    # Cargar high score desde un archivo
-    def load_high_score(filename="high_score.txt"):
-        if os.path.exists(filename):
-            with open(filename, "r") as file:
-                return int(file.read().strip())
-        return 0
-
-    # Mostrar high score en la pantalla
-    def show_high_score(high_score_x, high_score_y, high_score):
+    def show_high_score(high_score_x, high_score_y,enemy_counter):
+        # Consigue high score
+        hs = load_high_score()
+        # Impresion de numero en pantalla.
         font = pygame.font.Font("pixelart_font.ttf", 32)
-        text = font.render(f"{high_score}", True, (colors.LIGHT_RED))
+        text = font.render(f"{hs}", True, (colors.LIGHT_RED))
         screen.blit(text, (high_score_x, high_score_y))
+        
+        if enemy_counter > hs:
+            hs = enemy_counter 
+            print (hs)
 
-
+            # FB Load
+            ref = db.reference('high_score').set({"high_score":hs})
+            print(f"Se guardo high score: {hs} en referencia {ref} ")
 
     # Disparos
     shoots = pygame.sprite.Group()
@@ -264,12 +289,12 @@ def principal_game():
     music_on = False
     pause_selection = 1
    
+    high_score = load_high_score() 
+    print("PRimer load de high score: ",high_score)
     while execute:
 
         # Color pantalla
         screen.fill((colors.CHARCOAL))  
-
-        high_score = load_high_score()
 
         # Iterador de eventos
         for event in pygame.event.get():
@@ -279,7 +304,11 @@ def principal_game():
             # Evento disparar
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    
+                    #print("Highscore antes de guardar: ",high_score)
+                    #save_high_score(high_score) 
+                    #print("Highscore despues ed guardas: ",high_score)
+                    #high_score = load_high_score() 
+                    #print("EL MALDITO HIGHSCORE DE MIERDA despues de cargar el guardado: ", high_score)
                     pause_selection = pause(True)
                     
                     if pause_selection == 0:
@@ -316,10 +345,10 @@ def principal_game():
 
         # Niveles
         if enemy_counter % 5 == 0 and enemy_counter != 0 and not level_executed and len(enemies) < 10:
-            dificult = +1
-            if len(enemies) + dificult > 10:  # Asegura que no haya más de 10 enemigos
+            dificult = +1 
+            if len(enemies) + dificult > 10:  # Asegura que no haya más de 10 enemigos 
                 dificult = 10 - len(enemies)
-            for _ in range(dificult):  
+            for _ in range(dificult):   
                 enemy = Enemy()
                 enemies.add(enemy)
             level_executed = True  # Marca que el código se ha ejecutado una vez
@@ -353,9 +382,10 @@ def principal_game():
         if colision_player and bug_colision == False:
             for enemy in enemies:
                 pygame.mixer.music.stop()
-                gameover_sound.play()
+                gameover_sound.play() 
                 time.sleep(0.75)
                 print (enemy_counter)
+                save_high_score(high_score) # Cuando se pierde se actualiza el high score
                 return 4 # Pantalla GAME OVER
 
         else:
@@ -378,12 +408,10 @@ def principal_game():
 
         # Mostrar puntaje
         show_score(score_x, score_y)    
-        # Mostrar HIGH SCORE
-        update_high_score(enemy_counter,high_score)
-        show_high_score(score_x, (score_y+40) , high_score)
+        # Mostrar HIGH SCORE 
 
-        show_score(score_x,score_y)
-      
+        show_high_score(score_x, (score_y+40), enemy_counter)
+
         # Actualizar pantalla
         pygame.display.flip()
         pygame.time.Clock().tick(60)
@@ -535,6 +563,8 @@ def admin_mode():
             nopass_sound.play()
             print("Invalid input.")
             return 10
+
+
 
 print ("Loops: Ready")
 
