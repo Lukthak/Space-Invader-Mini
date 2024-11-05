@@ -1,5 +1,6 @@
-from loops import main_menu,principal_game,game_over,admin_mode,log_screen_change,log_end
 import pygame
+from loops import main_menu,principal_game,game_over,admin_mode,log_screen_change,log_end #Pantallas
+
 
 pygame.init()
 pygame.mixer.init() 
