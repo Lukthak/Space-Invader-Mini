@@ -7,6 +7,7 @@ import datetime
 import os
 import colors
 import firebase_admin
+import threading
 from firebase_admin import credentials, db
 
 
@@ -41,16 +42,9 @@ admin_select = pygame.mixer.Sound("sound/admin_select.wav")
 
 #Muisca
 song1 = ("sound/song1.wav")
-
+high_sc = 0
 #  
 def load_high_score():
-    '''
-    print("Loading high score from Firebase...")
-    ref = db.reference('high_score')
-    print("Loading high score...")
-    high_score = ref.get()
-    print (high_score)
-    print("Complete")
     '''
     high_score_data = ref.get()
     if high_score_data is None:
@@ -60,6 +54,22 @@ def load_high_score():
     high_score = high_score_data['high_score']
     print("SE CARGO EL HIGHSCORE: ",high_score)
     return high_score 
+    '''
+    global high_sc
+    while True:
+        ref = db.reference('high_score')
+        high_score_dta = ref.get()
+
+        if high_score_dta is None:
+            ref.set({'high_score':0})
+            high_sc = 0
+        else:
+            high_sc = high_score_dta['high_score']
+
+
+high_score_thd = threading.Thread(target=load_high_score)
+high_score_thd.daemon = True #esto lo q hace es q se cierre el thread al terminar
+high_score_thd.start()
 
 
 def save_high_score(high_score):
@@ -69,12 +79,10 @@ def save_high_score(high_score):
     })
     print("High score saved to Firebase.")
 
-
-
 # Menu principal 0
 def main_menu():
     pygame.init()
-    # Titulo/Icon
+    # Título/Icono
     pygame.display.set_caption("Space Invader")
     icon = pygame.image.load("sprites/icon.png")
     pygame.display.set_icon(icon)
@@ -83,33 +91,38 @@ def main_menu():
     execute = True
     selected_button = 0  # Indica el botón seleccionado    
 
+    # Crear fuentes para los botones
+    font = pygame.font.Font("pixelart_font.ttf", 32)
+    
+    # Definir los textos de los botones
+    buttons = ["Play", "Options", "Log Out", "Quit"]
+    
+    # Posiciones de los botones (puedes ajustar estos valores)
+    button_x = width // 2
+    button_y_start = height // 2.4
+    button_y_offset = 65
+
     while execute:
         # Color de fondo
         screen.fill(colors.CHARCOAL)
-        
-        # Crear fuentes para los botones
-        font = pygame.font.Font("pixelart_font.ttf",32)
-
-        # Definir los textos de los botones
-        buttons = ["Play","Options", "Quit"]
         
         # Dibujar los botones en pantalla
         for i, text in enumerate(buttons):
             color = colors.PASTEL_ORANGE if i == selected_button else colors.WHITE
             label = font.render(text, True, color)
-            label_rect = label.get_rect(center=(width // 2, height // 2.4 + i * 65))
+            label_rect = label.get_rect(center=(button_x, button_y_start + i * button_y_offset))
             screen.blit(label, label_rect)
-        # Limtie de botones
+        
+        # Límite de botones
         if selected_button < 0:
-            selected_button = (len(buttons)-1)
-        if selected_button > len(buttons)-1:
+            selected_button = len(buttons) - 1
+        if selected_button > len(buttons) - 1:
             selected_button = 0
-
 
         # Iterador de eventos
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                print ("Close")
+                print("Close")
                 return 3
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_DOWN:
@@ -118,28 +131,33 @@ def main_menu():
                 elif event.key == pygame.K_UP:
                     select_sound.play()
                     selected_button -= 1  # Cambiar selección hacia arriba
-                elif event.key == pygame.K_ESCAPE: 
+                elif event.key == pygame.K_ESCAPE:
                     # MODO ADMIN
                     return 10
-
                 elif event.key == pygame.K_RETURN:
                     if selected_button == 0:  # Play
                         enter_sound.play()
                         return 1
                     elif selected_button == 1:  # Options
-                        print ("Options/NOT CREATED")
-                        nopass_sound.play()
-                        # Codigo de opciones
-                    elif selected_button == 2:  # Quit
-                        print ("Close")
-                        return 3 # EVENTO CERRAR
-                        
+                        return 4
+                    elif selected_button == 2:  # Log Out
+                        print("Logging Out")
+                        return 5
+                    elif selected_button == 3:  # Quit
+                        print("Close")
+                        return 3  # EVENTO CERRAR
+
         try:
             pygame.display.flip()
         except pygame.error:
-            print ("Main menu - Error.")
+            print("Main menu - Error.")
 
         pygame.time.Clock().tick(60)
+
+
+# Llamar al menú principal
+
+
 
 # Pausa UNA LOOP SUPERPUESTO (MUCHO CUIDADO)
 def pause(execute_pause):
@@ -235,6 +253,7 @@ def principal_game():
     # Crea una instancia de Player
     player = Player(width, height)
 
+
     # Lista enemigos
     enemies = pygame.sprite.Group()
 
@@ -261,7 +280,8 @@ def principal_game():
     # Actualizar el high score y guardar en un hilo separado
     def show_high_score(high_score_x, high_score_y,enemy_counter):
         # Consigue high score
-        hs = load_high_score()
+        #hs = load_high_score()
+        hs = high_sc
         # Impresion de numero en pantalla.
         font = pygame.font.Font("pixelart_font.ttf", 32)
         text = font.render(f"{hs}", True, (colors.LIGHT_RED))
@@ -289,8 +309,9 @@ def principal_game():
     music_on = False
     pause_selection = 1
    
-    high_score = load_high_score() 
-    print("PRimer load de high score: ",high_score)
+    #high_score = load_high_score() 
+    high_score = high_sc
+
     while execute:
 
         # Color pantalla
@@ -404,14 +425,12 @@ def principal_game():
         # Ac pos disparo
         shoots.update()
         # Imprime disparo
-        shoots.draw(screen)
+        shoots.draw(screen) 
 
         # Mostrar puntaje
         show_score(score_x, score_y)    
         # Mostrar HIGH SCORE 
-
         show_high_score(score_x, (score_y+40), enemy_counter)
-
         # Actualizar pantalla
         pygame.display.flip()
         pygame.time.Clock().tick(60)

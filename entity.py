@@ -9,7 +9,7 @@ pygame.init()
 # Clase del jugador
 class Player:
     speed = 8
-    def __init__(self, screen_width, screen_height, sprite_path="sprites/player.png"):
+    def __init__(self, screen_width, screen_height, sprite_path="sprites/player.png"): #"sprites/player.png"
         # Cargar la imagen del jugador
         self.image = pygame.image.load(sprite_path)
         self.rect = self.image.get_rect()
